@@ -96,8 +96,9 @@ def agent_chat_page():
         "Wikipedia 搜索": wikipedia_search_tool,
         "今日AI论文查询": daily_ai_papers_tool,
     }
+    KBS = {}
     for k in kbs:
-        TOOLS[f"{k} 知识库"] = get_naive_rag_tool(k)
+        KBS[f"{k} 知识库"] = get_naive_rag_tool(k)
 
     if "agent_chat_history" not in st.session_state:
         st.session_state["agent_chat_history"] = [
@@ -105,8 +106,13 @@ def agent_chat_page():
         ]
 
     with st.sidebar:
-        selected_tools = st.multiselect("请选择对话中可使用的工具", list(TOOLS.keys()), default=list(TOOLS.keys()))
+        selected_tools = st.pills("请选择对话中可使用的工具", list(TOOLS.keys()), selection_mode="multi")
+        st.markdown(f"已选择工具：{selected_tools}")
+        selected_kbs = st.pills("请选择对话中可使用的知识库", list(KBS.keys()), selection_mode="multi")
+        st.markdown(f"已选择知识库：{selected_kbs}")
+        # selected_tools = st.multiselect("请选择对话中可使用的工具", list(TOOLS.keys()), default=list(TOOLS.keys()))
 
+    # selected_tools_kbs = selected_tools + selected_kbs
     display_chat_history()
 
     with st._bottom:
@@ -129,7 +135,7 @@ def agent_chat_page():
             model,
             temperature,
             st.session_state["agent_chat_history"][-history_len:],
-            selected_tools,
+            selected_tools + selected_kbs,
             TOOLS
         )
 
