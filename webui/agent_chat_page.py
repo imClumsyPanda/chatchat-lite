@@ -4,7 +4,7 @@ from typing import Literal
 from langchain_core.messages import AIMessageChunk, ToolMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph, MessagesState
-from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import ToolNode, tools_condition
 from tools import (
     weather_search_tool,
     get_naive_rag_tool,
@@ -15,38 +15,28 @@ from tools import (
 )
 
 
-
-def should_continue(state: MessagesState) -> Literal["tools", END]:
-    messages = state['messages']
-    last_message = messages[-1]
-    # print(last_message)
-    if last_message.tool_calls:
-        return "tools"
-    return END
-
-
 def get_agent_graph(platform, model, temperature, selected_tools, TOOLS):
     tools = [TOOLS[k] for k in selected_tools]
-    tool_node = ToolNode(tools)
+    tool_node = ToolNode(tools=tools)
 
     def call_model(state):
-        messages = state['messages']
-        llm = get_chatllm(platform, model, temperature=temperature).bind_tools(tools, parallel_tool_calls=False)
-        response = llm.invoke(messages)
-        return {"messages": [response]}
+        llm = get_chatllm(platform, model, temperature=temperature)
+        llm_with_tools = llm.bind_tools(tools)
+        return {"messages": [llm_with_tools.invoke(state["messages"])]}
 
     workflow = StateGraph(MessagesState)
 
     workflow.add_node("agent", call_model)
     workflow.add_node("tools", tool_node)
 
-    workflow.add_edge(START, "agent")
-    workflow.add_conditional_edges("agent", should_continue)
+    workflow.add_conditional_edges("agent", tools_condition)
     workflow.add_edge("tools", "agent")
+    workflow.set_entry_point("agent")
 
     checkpointer = MemorySaver()
     app = workflow.compile(checkpointer=checkpointer)
     return app
+
 
 def graph_response(graph, input):
     for event in graph.stream(
